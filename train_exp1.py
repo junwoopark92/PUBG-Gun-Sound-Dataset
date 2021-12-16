@@ -2,11 +2,13 @@ import glob
 import os
 os.environ['CUDA_VISIBLE_DEVICES']='4'
 import shutil
+
 import torch
 import torch.nn as nn
 import torchaudio
 import torchaudio.functional as F
 import torchaudio.transforms as T
+from torch.utils.data import DataLoader
 
 import argparse
 import matplotlib
@@ -14,20 +16,19 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import time
 from IPython.display import Audio, display
-
-from torch.utils.data import DataLoader
+from sklearn.metrics import f1_score, accuracy_score
 
 import numpy as np
 
 from dataset import GunSoundDataset
-from models import CNNExtractor, SingleClassifer
+from models import CNNExtractor, RNNExtractor, CRNNExtractor, TransformerExtractor, CTransExtractor, SingleClassifer
 
 if __name__ == '__main__':
     print(torch.__version__)
     print(torchaudio.__version__)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--backbone', default='CNN', type=str, choices=['CNN', 'RNN', 'CRNN', 'Trans'])
+    parser.add_argument('--backbone', default='CNN', type=str, choices=['CNN', 'RNN', 'CRNN', 'Trans', 'CTrans'])
     parser.add_argument('--datadir', default='./data/gun_sound_v1', type=str)
     parser.add_argument('--input_sec', default=3, type=int)
     parser.add_argument('--sr', default=44100, type=int)
@@ -56,17 +57,21 @@ if __name__ == '__main__':
     if args.backbone == 'CNN':
         backbone = CNNExtractor(args.hdim, sample_rate=args.sr, n_fft=512, n_mels=96).cuda()
     elif args.backbone == 'RNN':
-        pass
+        backbone = RNNExtractor(args.hdim, sample_rate=args.sr, n_fft=512, n_mels=96).cuda()
     elif args.backbone == 'CRNN':
-        pass
+        backbone = CRNNExtractor(args.hdim, sample_rate=args.sr, n_fft=512, n_mels=96).cuda()
     elif args.backbone == 'Trans':
-        pass
+        backbone = TransformerExtractor(args.hdim, sample_rate=args.sr, n_fft=512, n_mels=96).cuda()
+    elif args.backbone == 'CTrans':
+        backbone = CTransExtractor(args.hdim, sample_rate=args.sr, n_fft=512, n_mels=96).cuda()
     else:
         raise Exception(f'Not Supported Backbone:{args.backbone}')
 
     classifier = SingleClassifer(args.hdim, len(label_dicts['cate'])).cuda()
     print(backbone)
     print(classifier)
+    params = sum(p.numel() for p in backbone.parameters() if p.requires_grad)
+    print(f'# of Backbone Parameters:{params}')
 
     ce = nn.CrossEntropyLoss()
     opt = torch.optim.Adam(list(backbone.parameters()) + list(classifier.parameters()), lr=args.lr)
@@ -76,14 +81,14 @@ if __name__ == '__main__':
         classifier.train()
 
         ce_loss = 0.0
-        cate_accs = 0.0
+        cate_preds, cate_trues = [], []
         for step, (wv, cate, dist, dire) in enumerate(train_loader):
             wv, cate = wv.cuda(), cate.cuda()
-            #print(step, wv.shape, cate)
+
             features = backbone(wv)
             cate_out = classifier(features)
-            #print(output.shape, cate.shape)
             cate_loss = ce(cate_out, cate)
+            cate_pred = torch.argmax(cate_out, dim=-1)
 
             loss = cate_loss
             opt.zero_grad()
@@ -91,36 +96,46 @@ if __name__ == '__main__':
             opt.step()
             ce_loss += loss.item()
 
+            cate_preds.append(cate_pred.detach().cpu())
+            cate_trues.append(cate.detach().cpu())
+
+        cate_preds = torch.cat(cate_preds, dim=0).numpy()
+        cate_trues = torch.cat(cate_trues, dim=0).numpy()
+
         train_ce_loss = ce_loss / len(train_loader)
-        train_acc = cate_accs / len(train_loader)
+        train_cate_acc = accuracy_score(cate_trues, cate_preds)
+        train_cate_f1 = f1_score(cate_trues, cate_preds, average='macro')
 
         with torch.no_grad():
             backbone.eval()
             classifier.eval()
 
-            cate_accs = 0.0
             ce_loss = 0.0
+            cate_preds, cate_trues = [], []
             for step, (wv, cate, dist, dire) in enumerate(test_loader):
                 wv, cate = wv.cuda(), cate.cuda()
-                #print(step, wv.shape, cate)
+
                 features = backbone(wv)
                 cate_out = classifier(features)
-                #print(output.shape, cate.shape)
                 cate_loss = ce(cate_out, cate)
-                #print(output.shape)
                 cate_pred = torch.argmax(cate_out, dim=-1)
-                #print(preds)
-                #print((cate == preds))
-                cate_acc = (cate == cate_pred).float().mean()
+
+                cate_preds.append(cate_pred.cpu())
+                cate_trues.append(cate.cpu())
 
                 ce_loss += cate_loss.item()
-                cate_accs += cate_acc
+
+            cate_preds = torch.cat(cate_preds, dim=0).numpy()
+            cate_trues = torch.cat(cate_trues, dim=0).numpy()
 
             test_ce_loss = ce_loss / len(test_loader)
-            test_cate_acc = cate_accs / len(test_loader)
+            test_cate_acc = accuracy_score(cate_trues, cate_preds)
+            test_cate_f1 = f1_score(cate_trues, cate_preds, average='macro')
 
-            print(epoch, f'train ce:{train_ce_loss:.4f}, train cate-acc:{train_cate_acc:.4f},'
-                         f' test ce:{test_ce_loss:.4f}, test cate-acc:{test_cate_acc:.4f}')
+            print(epoch, f'train ce:{train_ce_loss:.4f}, train cate-acc:{train_cate_acc:.4f}, '
+                         f'train cate-F1:{train_cate_f1:.4f} '
+                         f'test ce:{test_ce_loss:.4f}, test cate-acc:{test_cate_acc:.4f}, '
+                         f'test cate-F1:{test_cate_f1:.4f},')
 
 
 
