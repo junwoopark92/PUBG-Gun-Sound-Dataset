@@ -306,7 +306,6 @@ class CTransExtractor(nn.Module):
                     for _ in range(self.num_layers)]
         self.encoders = nn.ModuleList(encoders)
 
-
     def forward(self, x):
         x = self.spec(x)
         x = self.to_db(x)
@@ -317,14 +316,14 @@ class CTransExtractor(nn.Module):
         x = self.conv1(x)
         x = self.conv2(x)
         x = x.permute(2, 0, 1).contiguous()
-        padding_mask = torch.zeros(21, B).bool().cuda()
+        sl, _, _ = x.shape
+        padding_mask = torch.zeros(sl, B).bool().cuda()
         out = self.position_encoder(x)
         out = self.dropout(out)
         for encoder in self.encoders:
             out = encoder(out, padding_mask=padding_mask)
         # L, B, C
         return out.mean(dim=0)
-
 
 
 class SingleClassifer(nn.Module):
