@@ -19,7 +19,7 @@ from sklearn.metrics import f1_score, accuracy_score
 
 import numpy as np
 
-from dataset import GunSoundDataset
+from dataset import BGGunDataset
 from models import CNNExtractor, RNNExtractor, CRNNExtractor, TransformerExtractor, CTransExtractor, MultitaskClassifer, \
     OurClassifer, OurExtractor
 
@@ -45,8 +45,10 @@ if __name__ == '__main__':
     print(args)
 
     # load dataset
-    train_dataset = GunSoundDataset(args.datadir, './data/exp2_train.csv', args.sr, args.input_sec, 'train')
-    test_dataset = GunSoundDataset(args.datadir, './data/exp2_test.csv', args.sr, args.input_sec, 'test',
+    train_df = pd.read_csv('./data/v3_exp2_train.csv')
+    test_df = pd.read_csv('./data/v3_exp2_test.csv')
+    train_dataset = BGGunDataset(args.datadir, train_df, args.sr, args.input_sec, 'train')
+    test_dataset = BGGunDataset(args.datadir, test_df, args.sr, args.input_sec, 'test',
                                    dicts=train_dataset.dicts)
 
     print(train_dataset.dicts)
@@ -89,8 +91,8 @@ if __name__ == '__main__':
     print(f'# of Backbone Parameters:{params}')
 
     # load state dict
-    backbone.load_state_dict(torch.load(f'{args.backbone}_backbone.pt'))
-    classifier.load_state_dict(torch.load(f'{args.backbone}_classifier.pt'))
+    backbone.load_state_dict(torch.load(f'demo_{args.backbone}_backbone.pt'))
+    classifier.load_state_dict(torch.load(f'demo_{args.backbone}_classifier.pt'))
     backbone.eval()
     classifier.eval()
 

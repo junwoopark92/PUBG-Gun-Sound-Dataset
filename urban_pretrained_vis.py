@@ -34,6 +34,30 @@ def load_model(model, path):
     model.load_state_dict(torch.load(path))
 
 
+def inference(dataset, savename=None):
+    loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False, num_workers=2)
+    save_features, cate_preds, cate_trues = [], [], []
+    for step, (wv, cate, dist, dire) in enumerate(loader):
+        wv, cate = wv.cuda(), cate.cuda()
+
+        features = backbone(wv)
+        cate_out = classifier(features)
+
+        cate_pred = torch.argmax(cate_out, dim=-1)
+
+        save_features.append(features.cpu())
+        cate_preds.append(cate_pred.cpu())
+        cate_trues.append(cate.cpu())
+
+    save_features = torch.cat(save_features, dim=0).numpy()
+    cate_preds = torch.cat(cate_preds, dim=0).numpy()
+    cate_trues = torch.cat(cate_trues, dim=0).numpy()
+
+    np.save(f'{savename}-features.npy', save_features)
+    np.save(f'{savename}-preds.npy', cate_preds)
+    np.save(f'{savename}-trues.npy', cate_trues)
+
+
 if __name__ == '__main__':
     print(torch.__version__)
     print(torchaudio.__version__)
@@ -99,14 +123,12 @@ if __name__ == '__main__':
 
         bgg_df = pd.read_csv('/home/junwoopark/UrbanSound8K/metadata/UrbanSound8K_BGG.csv')
         bgg_df['aug'] = False
-        if args.use_bgg:
-            train_df = pd.concat([train_df, bgg_df], axis=0)
-            print(f'use bgg: {len(bgg_df)}')
-        else:
-            n_bgg = len(bgg_df)
-            aug_df = gun_train_df.sample(n_bgg, replace=True).copy()
-            aug_df['aug'] = True
-            train_df = pd.concat([train_df, aug_df], axis=0)
+
+        print(f'use bgg: {len(bgg_df)}')
+        n_bgg = len(bgg_df)
+        aug_df = gun_train_df.sample(n_bgg, replace=True).copy()
+        aug_df['aug'] = True
+        # train_df = pd.concat([train_df, bgg_df, aug_df], axis=0)
 
         train_dataset = UrbanGunDataset(args.datadir, train_df, args.sr, args.input_sec, 'train',
                                         use_bgg=args.use_bgg)
@@ -114,6 +136,11 @@ if __name__ == '__main__':
                                       dicts=train_dataset.dicts)
         test_dataset = UrbanGunDataset(args.datadir, test_df, args.sr, args.input_sec, 'test',
                                        dicts=train_dataset.dicts)
+        bgg_dataset = UrbanGunDataset(args.datadir, bgg_df, args.sr, args.input_sec, 'test',
+                                      dicts=train_dataset.dicts)
+        aug_dataset = UrbanGunDataset(args.datadir, aug_df, args.sr, args.input_sec, 'test',
+                                      dicts=train_dataset.dicts)
+
 
     else:
         raise Exception(f'Not supported dataset{args.dataset}')
@@ -254,7 +281,12 @@ if __name__ == '__main__':
                                 test_ce_loss, test_cate_acc, test_cate_f1, test_gun_acc]]
                 best_results = '\t'.join(best_results)
                 print(f'backbone saved at {savepath}')
-                save_model(backbone, savepath)
+                inference(test_dataset, 'test')
+                inference(bgg_dataset, 'bgg')
+                inference(aug_dataset, 'aug')
+
+
+                # save_model(backbone, savepath)
 
             print(epoch, f'train ce:{train_ce_loss:.4f}, train cate-acc:{train_cate_acc:.4f}, '
                          f'train cate-F1:{train_cate_f1:.4f}'
@@ -264,7 +296,6 @@ if __name__ == '__main__':
                          f'test cate-F1:{test_cate_f1:.4f}, test gun-acc:{test_gun_acc:.4f}')
 
     print(f"best results: {best_results}")
-
 
 
 

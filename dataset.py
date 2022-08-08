@@ -44,10 +44,10 @@ class CenterCrop:
 
 
 class BGGunDataset(Dataset):
-    def __init__(self, dirpath, path, sample_rate, input_sec, phase, dicts=None):
+    def __init__(self, dirpath, df, sample_rate, input_sec, phase, dicts=None):
         self.dirpath = dirpath
         self.phase = phase
-        self.df = pd.read_csv(path)
+        self.df = df #pd.read_csv(path)
         self.sr = sample_rate
         self.input_sec = input_sec
         self.dicts = dicts
@@ -64,6 +64,14 @@ class BGGunDataset(Dataset):
             dicts['dist'] = dist_dict
             dicts['dire'] = dire_dict
             self.dicts = dicts
+
+        tmp = self.df.sample(len(self.df))
+        n_train = int(len(tmp) * 0.8)
+        self.df = tmp[:n_train]
+        self.val_df = tmp[n_train:]
+
+    def get_val_df(self):
+        return self.val_df.copy()
 
     def __getitem__(self, index):
         inst = self.df.iloc[index]
@@ -90,6 +98,7 @@ class ForenGunDataset(Dataset):
         self.phase = phase
         self.n_train = n_train
         self.df = pd.read_csv(path)
+        self.df = self.df[self.df['dist'] != '-']
         self.sr = sample_rate
         self.input_sec = input_sec
         self.dicts = dicts
@@ -100,8 +109,11 @@ class ForenGunDataset(Dataset):
         if dicts is None:
             dicts = dict()
             class_dict = {cat:idx for idx, cat in enumerate(self.df['cate'].value_counts().index.tolist())}
+            dist_dict = {cat:idx for idx, cat in enumerate(self.df['dist'].value_counts().index.tolist())}
+            dire_dict = {cat:idx for idx, cat in enumerate(self.df['dire'].value_counts().index.tolist())}
             dicts['cate'] = class_dict
-
+            dicts['dist'] = dist_dict
+            dicts['dire'] = dire_dict
             self.dicts = dicts
 
         self.filterbyfold()
@@ -119,7 +131,10 @@ class ForenGunDataset(Dataset):
 
     def __getitem__(self, index):
         inst = self.df.iloc[index]
-        label = self.dicts['cate'][inst['cate']]
+        #label = self.dicts['cate'][inst['cate']]
+        cate = self.dicts['cate'][inst['cate']]
+        dist = self.dicts['dist'][inst['dist']]
+        dire = self.dicts['dire'][inst['dire']]
 
         # waveform, sr = torchaudio.load(inst['path'])
         tokens = inst['path'].split('/')
@@ -132,7 +147,8 @@ class ForenGunDataset(Dataset):
         _, L = waveform.shape
         length = self.sr*self.input_sec if L < self.sr*self.input_sec else L
         tmp = torch.zeros((2, length))
-        tmp[:, :L] = waveform
+        diff_l = length - L
+        tmp[:, diff_l//2: diff_l//2+L] = waveform
         waveform = tmp
         assert sr == self.sr
         if self.phase == 'train':
@@ -140,67 +156,51 @@ class ForenGunDataset(Dataset):
         else:
             cropped_wv = self.ccrop(waveform)
         #         print(inst['path'], cropped_wv.shape)
-        return cropped_wv, torch.tensor(label).long(), torch.zeros(1), torch.zeros(1)
+        return cropped_wv, torch.tensor(cate).long(), torch.tensor(dist).long(), torch.tensor(dire).long()
 
     def __len__(self):
         return len(self.df)
 
 
 class UrbanGunDataset(Dataset):
-    def __init__(self, dirpath, path, sample_rate, input_sec, phase, folds, use_bgg=False, dicts=None):
+    def __init__(self, dirpath, df, sample_rate, input_sec, phase, use_bgg=False, dicts=None):
         self.dirpath = dirpath
         self.phase = phase
         self.use_bgg = use_bgg
-        self.df = pd.read_csv(path)
+        self.df = df
         self.sr = sample_rate
         self.input_sec = input_sec
         self.dicts = dicts
-        self.folds = folds
 
         self.rclip = RandomClip(self.sr, self.sr*self.input_sec)
         self.ccrop = CenterCrop(self.sr, self.sr*self.input_sec)
 
-        if dicts is None:
-            dicts = dict()
-            class_dict = {cat:idx for idx, cat in enumerate(self.df['class'].value_counts().index.tolist())}
-            dicts['cate'] = class_dict
-
-            self.dicts = dicts
-
-        self.filterbyfold()
-
-    def filterbyfold(self):
-        folds = self.folds
-        if self.phase == 'train':
-            if self.use_bgg:
-                folds.append(999)
-            self.df = self.df[self.df['fold'].isin(folds)]
-        elif self.phase == 'val':
-            self.df = self.df[self.df['fold'].isin(folds)]
-        elif self.phase == 'test':
-            self.df = self.df[self.df['fold'].isin(folds)]
-        else:
-            raise Exception(f'Not Supported mode:{self.phase}')
-
     def __getitem__(self, index):
         inst = self.df.iloc[index]
-        label = 1 if inst['class'] == 'gun_shot' else 0
-        # label = self.dicts['cate'][inst['class']]
+        # label = 1 if inst['classID'] == 6 else 0
+        label = inst['classID']
         if inst['fold'] == 999:
-            path = os.path.join('./data/gun_sound_v1', inst['slice_file_name'])
-            waveform, sr = torchaudio.load(path)
-
+            path = os.path.join('./data/gun_sound_v2_numpy', inst['slice_file_name'].replace('.mp3', '.npy'))
+            waveform = torch.from_numpy(np.load(path))
         else:
             path = os.path.join(self.dirpath, f"fold{inst['fold']}", f"{inst['slice_file_name'].split('.')[0]}.npy")
             waveform = torch.from_numpy(np.load(path))
 
+        if inst['aug']:
+            # effects = [["lowpass", "-1", "300"], ["speed", "0.9"], ["rate", f"{self.sr}"]]
+            effects = [ ["speed", "0.9"], ["rate", f"{self.sr}"]]
+            waveform, sr = torchaudio.sox_effects.apply_effects_tensor(waveform, self.sr, effects)
+
         sr = self.sr
         if len(waveform.shape) == 1:
-            waveform = torch.stack([waveform, waveform], dim=0)
+            #waveform = torch.stack([waveform, waveform], dim=0)
+            waveform = waveform.reshape(1, -1)
+
         _, L = waveform.shape
         length = self.sr*self.input_sec if L < self.sr*self.input_sec else L
         tmp = torch.zeros((2, length))
-        tmp[:, :L] = waveform
+        diff_l = length - L
+        tmp[:, diff_l//2: diff_l//2+L] = waveform
         waveform = tmp
         assert sr == self.sr
         if self.phase == 'train':
@@ -208,12 +208,42 @@ class UrbanGunDataset(Dataset):
         else:
             cropped_wv = self.ccrop(waveform)
         #         print(inst['path'], cropped_wv.shape)
-        return cropped_wv, torch.tensor(label).long(), torch.zeros(1), torch.zeros(1)
+        return cropped_wv, torch.tensor(label).long(), torch.zeros(1), torch.zeros(1) # B, 2, 44100*2
 
     def __len__(self):
         return len(self.df)
 
 
+class UrbanGun1DDataset(Dataset):
+    def __init__(self, dirpath, df, sample_rate, input_sec, phase, use_bgg=False, dicts=None):
+        self.dirpath = dirpath
+        self.phase = phase
+        self.use_bgg = use_bgg
+        self.df = df
+        self.sr = sample_rate
+        self.input_sec = input_sec
+        self.dicts = dicts
+
+        self.rclip = RandomClip(self.sr, self.sr*self.input_sec)
+        self.ccrop = CenterCrop(self.sr, self.sr*self.input_sec)
+
+    def __getitem__(self, index):
+        inst = self.df.iloc[index]
+        label = inst['classID']
+
+        if inst['fold'] == 999:
+            path = os.path.join('./data/gun_sound_v1', inst['slice_file_name'])
+            waveform, sr = torchaudio.load(path)
+        else:
+            path = os.path.join(self.dirpath, f"fold{inst['fold']}", f"{inst['slice_file_name'].split('.')[0]}.npy")
+            waveform = torch.from_numpy(np.load(path))
+
+        waveform = waveform.reshape(1, 16, 8)
+
+        return waveform, torch.tensor(label).long(), torch.zeros(1), torch.zeros(1) # B, 2, 44100*2
+
+    def __len__(self):
+        return len(self.df)
 
 
 if __name__ == '__main__':

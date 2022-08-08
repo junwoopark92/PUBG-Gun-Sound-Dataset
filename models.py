@@ -6,6 +6,51 @@ import torchaudio.transforms as T
 
 from transformer import PositionalEncoding, TransformerEncoderBlock
 
+
+class MeanCNNExtractor(nn.Module):
+    def __init__(self, hidden_dim,
+                 sample_rate=16000,
+                 n_fft=512,
+                 f_min=0.0,
+                 f_max=8000.0,
+                 n_mels=96):
+        """
+        Args:
+          sample_rate (int): path to load dataset from
+          n_fft (int): number of samples for fft
+          f_min (float): min freq
+          f_max (float): max freq
+          n_mels (float): number of mel bin
+          n_class (int): number of class
+        """
+        super(MeanCNNExtractor, self).__init__()
+        # Spectrogram
+
+        self.conv0 = nn.Sequential(
+            nn.Conv2d(1, out_channels=hidden_dim, kernel_size=3, stride=1, padding=1),
+            nn.Tanh(),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(hidden_dim, out_channels=hidden_dim*2, kernel_size=3, stride=1, padding=1),
+            nn.Tanh(),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+        self.dropout = nn.Dropout(0.1)
+
+    def forward(self, x):
+        # 1, 16, 8
+        # print(x.shape)
+        x = self.conv0(x)
+        # print(x.shape)
+        x = self.conv1(x)
+        # print(x.shape)
+        x = self.dropout(x)
+        return x
+
+
+
 class CNNExtractor(nn.Module):
     def __init__(self, hidden_dim,
                  sample_rate=16000,
@@ -55,10 +100,13 @@ class CNNExtractor(nn.Module):
 
         # Aggregate features over temporal dimension.
         self.final_pool = nn.AdaptiveAvgPool1d(1)
+        self.dropout = nn.Dropout(0.2)
         # Predict tag using the aggregated features.
 
     def forward(self, x):
+        # B, 2, T
         x = self.spec(x)
+        # B, T, M  (B, 192, 96) > (B, 96)
         x = self.to_db(x)
         x = self.spec_bn(x)
         B, C, M, T = x.shape
@@ -67,6 +115,7 @@ class CNNExtractor(nn.Module):
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.final_pool(x)
+        x = self.dropout(x)
         return x
 
 
@@ -122,7 +171,8 @@ class CRNNExtractor(nn.Module):
         self.n_layers = 2
         self.lstm = nn.LSTM(input_size=hidden_dim, hidden_size=hidden_dim//self.n_layers, num_layers=self.n_layers,
                             bidirectional=True, batch_first=True)
-        self.fc = nn.Linear(hidden_dim*2, hidden_dim)
+
+        self.dropout = nn.Dropout(0.2)
 
     def forward(self, x):
         x = self.spec(x)
@@ -133,10 +183,10 @@ class CRNNExtractor(nn.Module):
         x = self.conv0(x)
         x = self.conv1(x)
         x = self.conv2(x)
+        x = self.dropout(x)
         x = x.permute(0, 2, 1).contiguous()
         x, (hn, cn) = self.lstm(x)
-        hn = hn.permute(1, 0, 2).reshape(B, -1)
-        x = self.fc(hn)
+        x = x.mean(dim=1)
         return x
 
 
@@ -179,8 +229,10 @@ class RNNExtractor(nn.Module):
         x = x.reshape(B, C*M, T)  # for 1D
         x = x.permute(0, 2, 1).contiguous()
         x, (hn, cn) = self.lstm(x)
-        hn = hn.permute(1, 0, 2).reshape(B, -1)
-        x = self.fc(hn)
+        # print(x.shape, hn.shape)
+        x = x.mean(dim=1)
+        # hn = hn.permute(1, 0, 2).reshape(B, -1)
+        # x = self.fc(hn)
         return x
 
 
@@ -305,6 +357,7 @@ class CTransExtractor(nn.Module):
         encoders = [TransformerEncoderBlock(hidden_dim=hidden_dim, dropout=0.5, n_head=4, feed_forward_dim=hidden_dim) \
                     for _ in range(self.num_layers)]
         self.encoders = nn.ModuleList(encoders)
+        self.dropout = nn.Dropout(0.2)
 
     def forward(self, x):
         x = self.spec(x)
@@ -315,6 +368,7 @@ class CTransExtractor(nn.Module):
         x = self.conv0(x)
         x = self.conv1(x)
         x = self.conv2(x)
+        x = self.dropout(x)
         x = x.permute(2, 0, 1).contiguous()
         sl, _, _ = x.shape
         padding_mask = torch.zeros(sl, B).bool().cuda()
@@ -329,10 +383,10 @@ class CTransExtractor(nn.Module):
 class SingleClassifer(nn.Module):
     def __init__(self, hidden_dim, n_class):
         super(SingleClassifer, self).__init__()
-        self.fc = nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, n_class))
+        self.fc = nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.Tanh(), nn.Linear(hidden_dim, n_class))
 
     def forward(self, feature):
-        logit = self.fc(feature.squeeze(-1))
+        logit = self.fc(feature.flatten(start_dim=1))
         return logit
 
 
