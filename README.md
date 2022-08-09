@@ -2,6 +2,8 @@
 This repository provides the official BGG dataset and implementation of the following paper: 
 "Enemy Spotted: In-game Gun Sound Dataset for Gunshot Classification and Localization" accepted at Conference of Games (GoG) 2022.
 
+![demo](https://user-images.githubusercontent.com/26558158/183609029-9fa05f22-4adb-4c67-993b-60fd1c4c1029.jpg)
+
 ## Env
 ```
 python 3.8
