@@ -141,7 +141,6 @@ if __name__ == '__main__':
         aug_dataset = UrbanGunDataset(args.datadir, aug_df, args.sr, args.input_sec, 'test',
                                       dicts=train_dataset.dicts)
 
-
     else:
         raise Exception(f'Not supported dataset{args.dataset}')
 
@@ -284,7 +283,6 @@ if __name__ == '__main__':
                 inference(test_dataset, 'test')
                 inference(bgg_dataset, 'bgg')
                 inference(aug_dataset, 'aug')
-
 
                 # save_model(backbone, savepath)
 

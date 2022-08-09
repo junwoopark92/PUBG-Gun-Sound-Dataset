@@ -1,6 +1,5 @@
 import glob
 import os
-# os.environ['CUDA_VISIBLE_DEVICES']='4'
 import shutil
 import random
 import warnings
@@ -73,7 +72,7 @@ if __name__ == '__main__':
         test_dataset = ForenGunDataset(args.datadir, './data/GunshotAudioForensicsDataset/test.csv', args.sr, args.input_sec, 'test',
                                         dicts=train_dataset.dicts)
     elif args.dataset == 'Urban':
-        df = pd.read_csv('/home/junwoopark/UrbanSound8K/metadata/UrbanSound8K.csv')
+        df = pd.read_csv('./data/UrbanSound8K/metadata/UrbanSound8K.csv')
         df['aug'] = False
         nogun_df = df[df['classID'] != 6]
         gun_df = df[df['classID'] == 6]
@@ -97,7 +96,7 @@ if __name__ == '__main__':
         val_df = pd.concat([nogun_val_df, gun_val_df], axis=0)
         test_df = pd.concat([nogun_test_df, gun_test_df], axis=0)
 
-        bgg_df = pd.read_csv('/home/junwoopark/UrbanSound8K/metadata/UrbanSound8K_BGG.csv')
+        bgg_df = pd.read_csv('./data/UrbanSound8K/metadata/UrbanSound8K_BGG.csv')
         bgg_df['aug'] = False
         if args.use_bgg:
             train_df = pd.concat([train_df, bgg_df], axis=0)
@@ -121,7 +120,7 @@ if __name__ == '__main__':
     label_dicts = train_dataset.dicts
     n_class = len(label_dicts['cate']) if args.dataset != 'Urban' else 10 #2
 
-    print(f'EXP1 for {args.dataset} Training:{len(train_dataset)} Val:{len(val_dataset)} Test:{len(test_dataset)}, # of labels: {n_class}')
+    print(f'EXP1 Gunshot Classification for {args.dataset} Training:{len(train_dataset)} Val:{len(val_dataset)} Test:{len(test_dataset)}, # of labels: {n_class}')
     print()
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)

@@ -78,7 +78,7 @@ if __name__ == '__main__':
 
     label_dicts = train_dataset.dicts
     print(label_dicts)
-    print(f'EXP2 Training:{len(train_dataset)}, Val:{len(val_dataset)}, Test:{len(test_dataset)}')
+    print(f'EXP2 Gunshot Localization and Classification Training:{len(train_dataset)}, Val:{len(val_dataset)}, Test:{len(test_dataset)}')
     print()
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)

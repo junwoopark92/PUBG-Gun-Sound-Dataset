@@ -249,12 +249,12 @@ class UrbanGun1DDataset(Dataset):
 if __name__ == '__main__':
     dirpath = './data/gun_sound_v1'
 
-    exp1_train_dataset = BGGunDataset(dirpath, './data/exp1_train.csv', 44100, 3, 'train')
-    exp1_test_dataset = BGGunDataset(dirpath, './data/exp1_test.csv', 44100, 3, 'test')
-    exp2_train_dataset = BGGunDataset(dirpath, './data/exp2_train.csv', 44100, 3, 'train')
-    exp2_test_dataset = BGGunDataset(dirpath, './data/exp2_test.csv', 44100, 3, 'test')
-    exp3_train_dataset = BGGunDataset(dirpath, './data/exp3_train.csv', 44100, 3, 'train')
-    exp3_test_dataset = BGGunDataset(dirpath, './data/exp3_test.csv', 44100, 3, 'test')
+    exp1_train_dataset = BGGunDataset(dirpath, './data/v3_exp1_train.csv', 44100, 3, 'train')
+    exp1_test_dataset = BGGunDataset(dirpath, './data/v3_exp1_test.csv', 44100, 3, 'test')
+    exp2_train_dataset = BGGunDataset(dirpath, './data/v3_exp2_train.csv', 44100, 3, 'train')
+    exp2_test_dataset = BGGunDataset(dirpath, './data/v3_exp2_test.csv', 44100, 3, 'test')
+    exp3_train_dataset = BGGunDataset(dirpath, './data/v3_exp3_train.csv', 44100, 3, 'train')
+    exp3_test_dataset = BGGunDataset(dirpath, './data/v3_exp3_test.csv', 44100, 3, 'test')
 
     wv, cate, dist, dire = exp1_train_dataset[0]
     print(len(exp1_train_dataset), len(exp1_test_dataset), wv.shape, cate, dist, dire)
