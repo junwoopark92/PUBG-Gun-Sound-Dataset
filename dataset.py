@@ -232,7 +232,7 @@ class UrbanGun1DDataset(Dataset):
         label = inst['classID']
 
         if inst['fold'] == 999:
-            path = os.path.join('./data/gun_sound_v1', inst['slice_file_name'])
+            path = os.path.join('./data/gun_sound_v2', inst['slice_file_name'])
             waveform, sr = torchaudio.load(path)
         else:
             path = os.path.join(self.dirpath, f"fold{inst['fold']}", f"{inst['slice_file_name'].split('.')[0]}.npy")
@@ -247,7 +247,7 @@ class UrbanGun1DDataset(Dataset):
 
 
 if __name__ == '__main__':
-    dirpath = './data/gun_sound_v1'
+    dirpath = './data/gun_sound_v2'
 
     exp1_train_dataset = BGGunDataset(dirpath, './data/v3_exp1_train.csv', 44100, 3, 'train')
     exp1_test_dataset = BGGunDataset(dirpath, './data/v3_exp1_test.csv', 44100, 3, 'test')
