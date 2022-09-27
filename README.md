@@ -43,5 +43,12 @@ train_localization_and_classification.py --backbone {CNN, RNN, CRNN, Trans, CTra
 
 ## Citation
 ```
-
+@inproceedings{park2022enemy,
+  title={Enemy Spotted: In-game Gun Sound Dataset for Gunshot Classification and Localization},
+  author={Park, Junwoo and Cho, Youngwoo and Sim, Gyuhyeon and Lee, Hojoon and Choo, Jaegul},
+  booktitle={2022 IEEE Conference on Games (CoG)},
+  pages={56--63},
+  year={2022},
+  organization={IEEE}
+}
 ```
