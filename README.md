@@ -1,4 +1,4 @@
-# BGGunSoundDataset
+# PUBG Gun Sound Dataset
 This repository provides the official BGG dataset and implementation of the following paper: 
 "Enemy Spotted: In-game Gun Sound Dataset for Gunshot Classification and Localization" accepted at IEEE Conference on Games (GoG) 2022.
 
